@@ -1,19 +1,21 @@
 {
   "name": "grid",
-  "version": "1.0.0",
-  "description": "A modern, high-performance spreadsheet application.",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "GRID — a modern, high-performance spreadsheet application",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/krishnashahane/grid.git"
   },
-  "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/krishnashahane/grid/issues"
   },
@@ -31,5 +33,6 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.2"
-  }
+  },
+  "private": true
 }
