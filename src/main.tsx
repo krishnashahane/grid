@@ -4,7 +4,8 @@ import './styles.css';
 import { Workbook } from './engine/workbook';
 import { initStore } from './app/store';
 import { App } from './app/App';
-import { loadLocal } from './app/actions';
+import { ErrorBoundary } from './app/components/ErrorBoundary';
+import { loadLocal, STORAGE_KEY } from './app/actions';
 import { loadSample } from './app/sample';
 
 const wb = new Workbook();
@@ -15,7 +16,11 @@ if (saved) {
     wb.loadJSON(saved);
     restored = true;
   } catch (e) {
-    console.warn('Could not restore the saved workbook', e);
+    // keep the unreadable data instead of letting autosave overwrite it
+    try {
+      localStorage.setItem(`grid.recovery.${Date.now()}`, localStorage.getItem(STORAGE_KEY) ?? '');
+    } catch { /* storage full or blocked */ }
+    console.warn('Could not restore the saved workbook; a copy was kept for recovery', e);
   }
 }
 const store = initStore(wb);
@@ -23,7 +28,9 @@ if (restored && saved?.activeSheet && wb.sheet(saved.activeSheet)) store.set({ s
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 

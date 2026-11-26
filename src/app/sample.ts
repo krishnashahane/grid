@@ -54,6 +54,8 @@ export function loadSample() {
       ['Region', 'Revenue', 'Share', 'Deals'],
       [`=SORT(UNIQUE(${S}B2:B61))`, `=SUMIFS(${S}$G$2:$G$61,${S}$B$2:$B$61,A4:A7)`, `=B4:B7/SUM(${S}$G$2:$G$61)`, `=COUNTIFS(${S}$B$2:$B$61,A4:A7)`],
     ]);
+    // in-cell trend charts: every deal for the region, in date order
+    wb.setCells(tid, 2, 4, [['Deal trend'], ...[4, 5, 6, 7].map((r) => [`=SPARKLINE(FILTER(${S}$G$2:$G$61,${S}$B$2:$B$61=A${r}),"column")`])]);
     wb.setCells(tid, 9, 0, [
       ['Key figures', ''],
       ['Total revenue', `=SUM(${S}G2:G61)`],
@@ -64,7 +66,7 @@ export function loadSample() {
       ['Payment on largest deal (36 mo @ 7%)', `=PMT(7%/12,36,-MAX(${S}G2:G61))`],
     ]);
     wb.setStyle(tid, [{ r1: 0, c1: 0, r2: 0, c2: 0 }], { b: true, size: 20 });
-    wb.setStyle(tid, [{ r1: 2, c1: 0, r2: 2, c2: 3 }, { r1: 9, c1: 0, r2: 9, c2: 1 }], hdr);
+    wb.setStyle(tid, [{ r1: 2, c1: 0, r2: 2, c2: 4 }, { r1: 9, c1: 0, r2: 9, c2: 1 }], hdr);
     wb.setStyle(tid, [{ r1: 3, c1: 1, r2: 6, c2: 1 }, { r1: 10, c1: 1, r2: 12, c2: 1 }, { r1: 14, c1: 1, r2: 15, c2: 1 }], { fmt: '$#,##0.00' });
     wb.setStyle(tid, [{ r1: 3, c1: 2, r2: 6, c2: 2 }], { fmt: '0.0%' });
     wb.setStyle(tid, [{ r1: 10, c1: 0, r2: 15, c2: 0 }], { b: true });
@@ -72,10 +74,12 @@ export function loadSample() {
   wb.updateSheet(tid, 'Sample setup', (x) => {
     x.colWidths.set(0, 250);
     x.colWidths.set(1, 130);
+    x.colWidths.set(4, 160);
     x.rowHeights.set(0, 40);
+    for (let r = 3; r <= 6; r++) x.rowHeights.set(r, 30);
     x.cf.push({ id: uid('cf'), ranges: [{ r1: 3, c1: 2, r2: 6, c2: 2 }], type: 'dataBar', colors: ['#8b5cf6'] });
-    x.charts.push({ id: uid('c'), type: 'doughnut', title: 'Revenue by region', dataSheetId: tid, range: { r1: 2, c1: 0, r2: 6, c2: 1 }, headers: true, seriesInColumns: true, x: 600, y: 48, w: 440, h: 300, legend: true });
-    x.charts.push({ id: uid('c'), type: 'column', title: 'Revenue by region', dataSheetId: tid, range: { r1: 2, c1: 0, r2: 6, c2: 1 }, headers: true, seriesInColumns: true, x: 600, y: 368, w: 440, h: 280, legend: false });
+    x.charts.push({ id: uid('c'), type: 'doughnut', title: 'Revenue by region', dataSheetId: tid, range: { r1: 2, c1: 0, r2: 6, c2: 1 }, headers: true, seriesInColumns: true, x: 760, y: 48, w: 440, h: 300, legend: true });
+    x.charts.push({ id: uid('c'), type: 'column', title: 'Revenue by region', dataSheetId: tid, range: { r1: 2, c1: 0, r2: 6, c2: 1 }, headers: true, seriesInColumns: true, x: 760, y: 368, w: 440, h: 280, legend: false });
   });
   s.set({ sheetId: sid, scroll: { x: 0, y: 0 } });
   s.select(1, 0);

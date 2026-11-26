@@ -89,6 +89,14 @@ export function toCSV(rows: string[][], delimiter = ','): string {
 }
 
 /** Export a sheet's used range; formatted (displayed) text by default. */
+/**
+ * Text that starts like a formula is prefixed with an apostrophe so that other spreadsheet apps
+ * opening the exported file show it as text instead of executing it (CSV formula injection).
+ */
+export function neutralizeFormula(text: string): string {
+  return /^[=+\-@\t\r|]/.test(text) ? "'" + text : text;
+}
+
 export function exportSheetCSV(wb: Workbook, sid: string, opts: { delimiter?: string; formatted?: boolean } = {}): string {
   const sh = wb.sheet(sid)!;
   const { maxRow, maxCol } = sh.bounds;
@@ -97,7 +105,8 @@ export function exportSheetCSV(wb: Workbook, sid: string, opts: { delimiter?: st
     const row: string[] = [];
     for (let c = 0; c <= maxCol; c++) {
       const v: Scalar = wb.getValue(sid, r, c);
-      row.push(opts.formatted === false ? scalarToText(v) : wb.getDisplay(sid, r, c).text);
+      const text = opts.formatted === false ? scalarToText(v) : wb.getDisplay(sid, r, c).text;
+      row.push(typeof v === 'string' ? neutralizeFormula(text) : text);
     }
     rows.push(row);
   }

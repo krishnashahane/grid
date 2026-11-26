@@ -6,6 +6,8 @@ import { CFEngine } from '../engine/features/cf';
 import { Rect, colToName, cellKey, inRect, normRect } from '../engine/address';
 import { Geometry, HEADER_H, HEADER_W } from './geometry';
 import { CellError } from '../engine/values';
+import { parseSparkline, SparkSpec } from '../engine/functions/sparkline';
+import type { Node } from '../engine/parser';
 import { RefMark } from './formulaAssist';
 import { ruleAt } from '../engine/features/validation';
 
@@ -222,6 +224,11 @@ function drawPane(ctx: CanvasRenderingContext2D, wb: Workbook, sh: Sheet, g: Geo
         text = f.text;
         color = f.color;
         numeric = f.numeric;
+      }
+      if (!ov.formulaView && cell?.node?.t === 'call' && cell.node.name === 'SPARKLINE' && !(v0 instanceof CellError)) {
+        const spec = sparkSpec(wb, sid, r, c, cell.node);
+        if (spec) drawSparkline(ctx, spec, X(c), y, w * z, h * z, st.color ?? p.accent);
+        continue;
       }
       if (!text) continue;
       const isErr = v0 instanceof CellError;
@@ -455,6 +462,123 @@ function redrawCell(ctx: CanvasRenderingContext2D, wb: Workbook, sh: Sheet, g: G
   ctx.fillStyle = p.bg;
   ctx.fillRect(x, y, w - 1, h - 1);
   drawPane(ctx, wb, sh, g, v, p, { ...ov, ranges: [], refs: [], clip: null, fillPreview: null, pointRect: null, dragMove: null, active: { row: -1, col: -1 } }, cf, sub);
+}
+
+// ------------------------------------------------------------------ sparklines
+const sparkCache = new Map<string, { version: number; raw: string; spec: SparkSpec | null }>();
+
+function sparkSpec(wb: Workbook, sid: string, row: number, col: number, node: Extract<Node, { t: 'call' }>): SparkSpec | null {
+  const id = `${sid}:${row}:${col}`;
+  const raw = wb.getCell(sid, row, col)?.raw ?? '';
+  const hit = sparkCache.get(id);
+  if (hit && hit.version === wb.version && hit.raw === raw) return hit.spec;
+  let spec: SparkSpec | null = null;
+  try {
+    spec = parseSparkline(node.args.map((a) => (a.t === 'missing' ? null : wb.evaluateNode(sid, row, col, a))));
+  } catch {
+    spec = null;
+  }
+  if (sparkCache.size > 5000) sparkCache.clear();
+  sparkCache.set(id, { version: wb.version, raw, spec });
+  return spec;
+}
+
+const SPARK_NEG = '#e5484d';
+
+function drawSparkline(ctx: CanvasRenderingContext2D, spec: SparkSpec, x: number, y: number, w: number, h: number, themeColor: string) {
+  const color = spec.color ?? themeColor;
+  const pad = Math.max(3, Math.min(6, h * 0.18));
+  const L = x + pad, T = y + pad, W = w - 2 * pad - 1, H = h - 2 * pad - 1;
+  if (W < 4 || H < 3) return;
+  const pts = spec.points;
+  const nums = pts.filter((v): v is number => v !== null);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w - 1, h - 1);
+  ctx.clip();
+  if (spec.type === 'bar') {
+    const v = nums[nums.length - 1];
+    const max = spec.max ?? Math.max(...nums.map(Math.abs), 1e-12);
+    const frac = Math.max(0, Math.min(1, Math.abs(v) / max));
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = color;
+    ctx.fillRect(L, T, W, H);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = v < 0 ? SPARK_NEG : color;
+    ctx.fillRect(L, T, Math.max(1, W * frac), H);
+    ctx.restore();
+    return;
+  }
+  const n = pts.length;
+  if (spec.type === 'column' || spec.type === 'winloss') {
+    const slot = W / n, bw = Math.max(1, slot * 0.72);
+    const lo = spec.type === 'winloss' ? -1 : Math.min(0, ...nums), hi = spec.type === 'winloss' ? 1 : Math.max(0, ...nums);
+    const span = hi - lo || 1;
+    const zeroY = T + H * (hi / span);
+    pts.forEach((v, i) => {
+      if (v === null || (spec.type === 'winloss' && v === 0)) return;
+      const val = spec.type === 'winloss' ? Math.sign(v) : v;
+      const bx = L + i * slot + (slot - bw) / 2;
+      const top = val >= 0 ? zeroY - (val / span) * H : zeroY;
+      const bh = Math.max(1, Math.abs(val / span) * H);
+      ctx.fillStyle = val < 0 ? SPARK_NEG : color;
+      ctx.fillRect(bx, top, bw, bh);
+    });
+    if (lo < 0) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = color;
+      ctx.fillRect(L, Math.round(zeroY), W, 1);
+    }
+    ctx.restore();
+    return;
+  }
+  // line / area: gaps break the line
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  const span = hi - lo || 1;
+  const px = (i: number) => (n === 1 ? L + W / 2 : L + (i / (n - 1)) * W);
+  const py = (v: number) => (hi === lo ? T + H / 2 : T + H - ((v - lo) / span) * H);
+  if (spec.type === 'area') {
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.18;
+    let open = false;
+    let firstX = 0, lastX = 0;
+    const close = () => { ctx.lineTo(lastX, T + H); ctx.lineTo(firstX, T + H); ctx.closePath(); ctx.fill(); open = false; };
+    pts.forEach((v, i) => {
+      if (v === null) { if (open) close(); return; }
+      if (!open) { ctx.beginPath(); ctx.moveTo(px(i), T + H); ctx.lineTo(px(i), py(v)); firstX = px(i); open = true; }
+      else ctx.lineTo(px(i), py(v));
+      lastX = px(i);
+    });
+    if (open) close();
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.25, h / 18);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  let pen = false;
+  pts.forEach((v, i) => {
+    if (v === null) { pen = false; return; }
+    if (pen) ctx.lineTo(px(i), py(v));
+    else { ctx.moveTo(px(i), py(v)); pen = true; }
+  });
+  ctx.stroke();
+  // markers: high, low and last point
+  const dot = (i: number, fill: string) => {
+    const v = pts[i];
+    if (v === null) return;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(px(i), py(v), Math.max(1.6, h / 14), 0, Math.PI * 2);
+    ctx.fill();
+  };
+  if (nums.length > 1) {
+    dot(pts.indexOf(hi), color);
+    dot(pts.indexOf(lo), SPARK_NEG);
+  }
+  for (let i = n - 1; i >= 0; i--) if (pts[i] !== null) { dot(i, color); break; }
+  ctx.restore();
 }
 
 /** Pick a text colour with enough contrast against a cell fill (keeps the theme colour when it already works). */

@@ -6,6 +6,7 @@ import './stats';
 import './date';
 import './array';
 import './finance';
+import './sparkline';
 import { FUNCTIONS } from '../evaluate';
 
 export { FUNCTIONS };

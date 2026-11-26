@@ -181,3 +181,94 @@ describe('outline groups', () => {
     expect(copy.colGroups[0]).toMatchObject({ s: 2, e: 4, collapsed: false });
   });
 });
+
+describe('SPARKLINE', () => {
+  it('validates input and evaluates to an empty value', () => {
+    const wb = new Workbook();
+    const sid = wb.sheets[0].id;
+    wb.setCells(sid, 0, 0, [['3'], ['x'], ['5'], ['-2']]);
+    wb.setCell(sid, 0, 1, '=SPARKLINE(A1:A4)');
+    wb.setCell(sid, 1, 1, '=SPARKLINE(A1:A4,"winloss","green")');
+    wb.setCell(sid, 2, 1, '=SPARKLINE(A1:A4,"pie")');
+    wb.setCell(sid, 3, 1, '=SPARKLINE(A1:A4,"line","not-a-colour")');
+    wb.setCell(sid, 4, 1, '=SPARKLINE(A2)');
+    expect(wb.getValue(sid, 0, 1)).toBe('');
+    expect(wb.getValue(sid, 1, 1)).toBe('');
+    expect(String(wb.getValue(sid, 2, 1))).toBe('#VALUE!');
+    expect(String(wb.getValue(sid, 3, 1))).toBe('#VALUE!');
+    expect(String(wb.getValue(sid, 4, 1))).toBe('#VALUE!');
+  });
+
+  it('parses points with gaps, colours and types', async () => {
+    const { parseSparkline } = await import('../src/engine/functions/sparkline');
+    const wb = new Workbook();
+    const sid = wb.sheets[0].id;
+    wb.setCells(sid, 0, 0, [['1'], [''], ['4']]);
+    const data = wb.evaluateFormula(sid, 5, 5, '=A1:A3') as any;
+    const spec = parseSparkline([data, 'Area', 'Blue']);
+    expect(spec).toMatchObject({ type: 'area', points: [1, null, 4], color: '#3e63dd' });
+  });
+});
+
+describe('security hardening', () => {
+  it('rejects files that are not workbooks and leaves the open workbook untouched', async () => {
+    const { WorkbookFormatError } = await import('../src/engine/sanitize');
+    const wb = new Workbook();
+    const sid = wb.sheets[0].id;
+    wb.setCell(sid, 0, 0, 'keep me');
+    for (const bad of [null, 42, 'x', {}, { app: 'other', sheets: [{}] }, { app: 'grid', sheets: [] }, { app: 'grid', sheets: [5] }]) {
+      expect(() => wb.loadJSON(bad)).toThrow(WorkbookFormatError);
+    }
+    expect(wb.getValue(sid, 0, 0)).toBe('keep me');
+  });
+
+  it('strips hostile and out-of-range content from a workbook file', () => {
+    const wb = new Workbook();
+    const evil = JSON.parse(`{
+      "app": "grid", "title": "${'t'.repeat(500)}",
+      "sheets": [
+        { "id": "a b<script>", "name": "Data", "cells": [
+            [0, 0, "ok", { "color": "url(javascript:alert(1))", "fill": "#ff0000", "b": true, "__proto__": { "polluted": 1 } }],
+            [-1, 0, "neg"], [0, 99999999, "far"], [1.5, 0, "frac"], [1, 1, 123], [2, 0, "=1+1"]
+          ],
+          "colWidths": [[0, 1e12], [-4, 10]], "frozenRows": 1e9, "tabColor": "expression(alert(1))",
+          "charts": [{ "id": "c1", "type": "column<img>", "range": { "r1": 0, "c1": 0, "r2": 1, "c2": 1 } }],
+          "rowGroups": [{ "s": 5, "e": 2 }, { "s": 1, "e": 3, "collapsed": "yes" }] },
+        { "id": "s2", "name": "Data", "cells": [] }
+      ],
+      "names": [{ "name": "1bad", "ref": "A1" }, { "name": "Good", "ref": "Data!A1" }]
+    }`);
+    wb.loadJSON(evil);
+    const [a, b] = wb.sheets;
+    expect(({} as any).polluted).toBeUndefined();
+    expect(wb.title.length).toBe(200);
+    expect(a.cells.size).toBe(2); // only (0,0) and the formula survive
+    const style = a.cells.get(0)!.style!;
+    expect(style.color).toBeUndefined();
+    expect(style).toMatchObject({ fill: '#ff0000', b: true });
+    expect(Object.keys(style)).not.toContain('__proto__');
+    expect(a.colWidths.get(0)).toBe(4000);
+    expect(a.frozenRows).toBe(1000);
+    expect(a.tabColor).toBeUndefined();
+    expect(a.charts.length).toBe(0);
+    expect(a.rowGroups).toEqual([{ s: 1, e: 3, collapsed: false }]);
+    expect(a.id).not.toContain('<');
+    expect(b.name).toBe('Data (2)');
+    expect([...wb.names.keys()]).toEqual(['GOOD']);
+    expect(wb.getValue(a.id, 2, 0)).toBe(2);
+  });
+
+  it('neutralizes formula-like text in CSV exports and caps generated arrays', async () => {
+    const { exportSheetCSV, neutralizeFormula } = await import('../src/engine/features/csv');
+    const wb = new Workbook();
+    const sid = wb.sheets[0].id;
+    wb.setCells(sid, 0, 0, [["'=HYPERLINK(\"http://x\")", '-5', "'@cmd", 'plain']]);
+    const csv = exportSheetCSV(wb, sid);
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"")"`);
+    expect(csv).toContain(',-5,');
+    expect(csv).toContain("'@cmd");
+    expect(neutralizeFormula('+1')).toBe("'+1");
+    wb.setCell(sid, 3, 0, '=RANDARRAY(5000,5000)');
+    expect(String(wb.getValue(sid, 3, 0))).toBe('#NUM!');
+  });
+});

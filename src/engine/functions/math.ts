@@ -177,6 +177,7 @@ register([
       const r = optNum(a, 0, 1), c = optNum(a, 1, 1), lo = optNum(a, 2, 0), hi = optNum(a, 3, 1);
       const whole = a[4] !== undefined && toNum(a[4]) !== 0;
       if (r < 1 || c < 1 || hi < lo) throw ERR.VALUE;
+      if (r * c > 1_048_576) throw ERR.NUM;
       return new Matrix(Array.from({ length: r }, () => Array.from({ length: c }, () => (whole ? lo + Math.floor(Math.random() * (hi - lo + 1)) : lo + Math.random() * (hi - lo)))));
     },
   },

@@ -44,6 +44,16 @@ export function Grid() {
   const scroll = useApp((s) => s.scroll);
   const formulaView = useApp((s) => s.formulaView);
   const sh = wb.sheet(sheetId) ?? wb.sheets[0];
+  // spoken by screen readers whenever the active cell or its content changes
+  const announce = useMemo(() => {
+    const { row, col } = sel.active;
+    const cell = sh.cells.get(cellKey(row, col));
+    const shown = wb.getDisplay(sh.id, row, col).text;
+    const parts = [cellName(row, col), shown || 'blank'];
+    if (cell?.node) parts.push(`formula ${cell.raw}`);
+    if (cell?.comment) parts.push(`comment: ${cell.comment}`);
+    return parts.join(', ');
+  }, [sel.active.row, sel.active.col, sh, version]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -950,7 +960,8 @@ export function Grid() {
       aria-label={`Spreadsheet grid, ${sh.name}. Active cell ${cellName(sel.active.row, sel.active.col)}`}
       role="grid"
     >
-      <canvas ref={canvasRef} />
+      <canvas ref={canvasRef} aria-hidden="true" />
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{announce}</div>
       <ChartLayer sheet={sh} view={view} />
       {editorBox && edit && (
         <FormulaEditor

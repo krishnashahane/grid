@@ -1,6 +1,7 @@
 // Workbook model: sheets, cells, dependency graph, incremental recalculation,
 // dynamic-array spilling, circular-reference detection and transactional undo/redo.
 
+import { sanitizeWorkbook } from './sanitize';
 import './functions';
 import { MAX_COLS, MAX_ROWS, Rect, cellKey, keyCol, keyRow, inRect, rectsIntersect, normRect } from './address';
 import {
@@ -1350,12 +1351,18 @@ export class Workbook {
     };
   }
 
-  loadJSON(data: SerialWorkbook, resetHistory = true) {
-    if (!data || data.app !== 'grid' || !Array.isArray(data.sheets) || !data.sheets.length) throw new Error('Not a GRID workbook');
+  /**
+   * Replaces the workbook's contents. Data from outside (files, storage) is validated first; internal
+   * undo/redo snapshots are trusted. Nothing changes unless the whole load succeeds.
+   */
+  loadJSON(input: SerialWorkbook | unknown, resetHistory = true, trusted = !resetHistory) {
+    const data = trusted ? (input as SerialWorkbook) : sanitizeWorkbook(input);
+    const sheets = data.sheets.map(deserializeSheet);
+    const names = new Map<string, NamedRange>();
+    for (const n of data.names ?? []) names.set(n.name.toUpperCase(), { ...n });
     this.title = data.title ?? 'Untitled spreadsheet';
-    this.sheets = data.sheets.map(deserializeSheet);
-    this.names = new Map();
-    for (const n of data.names ?? []) this.names.set(n.name.toUpperCase(), { ...n });
+    this.sheets = sheets;
+    this.names = names;
     for (const sh of this.sheets) for (const c of sh.cells.values()) {
       const pi = parseInput(c.raw);
       if (pi.formula) {

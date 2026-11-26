@@ -12,6 +12,7 @@ import { uid, Workbook, SerialWorkbook } from '../engine/workbook';
 import { validateInput, validateCustomAfter } from '../engine/features/validation';
 import { scalarToText } from '../engine/format';
 import { geometryOf } from './geometry';
+import { LIMITS } from '../engine/sanitize';
 import { addGroup, removeGroups, toggleAt, showLevel, OutlineAxis } from '../engine/features/outline';
 
 const S = () => getStore();
@@ -472,7 +473,7 @@ export function insertChart(type: ChartType = 'column', rect?: Rect, pivotId?: s
 
 // ------------------------------------------------------------------ file
 
-const STORAGE_KEY = 'grid.workbook.v1';
+export const STORAGE_KEY = 'grid.workbook.v1';
 
 export function saveLocal() {
   try {
@@ -524,6 +525,14 @@ export function newWorkbook() {
 
 export function openFile(file: File) {
   const s = S();
+  if (file.size > LIMITS.fileBytes) {
+    s.toast(`${file.name} is larger than ${LIMITS.fileBytes / 1024 / 1024} MB and was not opened.`, 'error');
+    return;
+  }
+  if (!/\.(grid|json|csv|tsv|txt)$/i.test(file.name)) {
+    s.toast(`${file.name} is not a supported file. Open a .grid, .csv, .tsv or .txt file.`, 'error');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     const text = String(reader.result ?? '');
