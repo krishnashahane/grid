@@ -1,14 +1,17 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { getStore, useApp } from './store';
 import { TopBar, Toolbar, FormulaBar, BottomBar } from './components/Chrome';
 import { Grid } from './components/Grid';
-import { PanelHost } from './components/Panels';
 import { CommandPalette, FindReplace, Dialogs, Toasts } from './components/Overlays';
 import * as A from './actions';
+
+// Side panels are loaded on first use to keep the initial download small.
+const PanelHost = lazy(() => import('./components/Panels').then((m) => ({ default: m.PanelHost })));
 
 export function App() {
   const store = getStore();
   const theme = useApp((s) => s.theme);
+  const panel = useApp((s) => s.panel);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -81,7 +84,11 @@ export function App() {
       <FormulaBar />
       <div className="main">
         <Grid />
-        <PanelHost />
+        {panel && (
+          <Suspense fallback={<aside className="panel" aria-busy="true" />}>
+            <PanelHost />
+          </Suspense>
+        )}
       </div>
       <BottomBar />
       <FindReplace />

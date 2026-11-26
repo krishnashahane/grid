@@ -79,7 +79,7 @@ export function goalSeek(wb: Workbook, sid: string, set: { row: number; col: num
     value: x,
     achieved: target + best.fx,
     iterations: it,
-    message: ok ? `Found a solution after ${it} iterations.` : 'Could not find an exact solution; the closest value was applied.',
+    message: ok ? `Found a solution after ${it} ${it === 1 ? 'iteration' : 'iterations'}.` : 'Could not find an exact solution; the closest value was applied.',
   };
 }
 

@@ -149,16 +149,18 @@ export async function copy(cut = false) {
   const text = rectText(sid(), rr);
   clip = { sheetId: sid(), rect: rr, cells, text, cut };
   S().set({ clipboard: { sheetId: sid(), rect: rr, cut } });
+  // Fire-and-forget: the system clipboard may prompt or stall; the internal clipboard always works.
   try {
-    await navigator.clipboard?.writeText(text);
-  } catch { /* clipboard permission denied: internal clipboard still works */ }
+    navigator.clipboard?.writeText(text).catch(() => {});
+  } catch { /* clipboard unavailable */ }
   S().toast(`${cut ? 'Cut' : 'Copied'} ${rectName(rr)}`);
 }
 
 export async function paste(mode: 'all' | 'values' | 'formats' | 'transpose' = 'all') {
   let text: string | null = null;
   try {
-    text = (await navigator.clipboard?.readText()) ?? null;
+    const read = navigator.clipboard?.readText() ?? Promise.resolve(null);
+    text = await Promise.race([read, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
   } catch {
     text = null;
   }
