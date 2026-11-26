@@ -9,6 +9,7 @@ import {
 import { EvalContext, Evaluator, FUNCTIONS } from './evaluate';
 import { CellError, ERR, Matrix, RangeValue, Scalar, err, isMatrix } from './values';
 import { parseInput } from './input';
+import { applyFilter } from './features/filter';
 import { formatValue } from './format';
 import { ChartDef, CFRule, FilterState, PivotDef, Scenario, Style, ValidationRule } from './types';
 
@@ -728,7 +729,19 @@ export class Workbook {
     return s;
   }
 
+  private silent = 0;
+  /** Run mutations without recording undo history (used by iterative tools such as goal seek). */
+  silently<T>(fn: () => T): T {
+    this.silent++;
+    try {
+      return fn();
+    } finally {
+      this.silent--;
+    }
+  }
+
   private pushHistory(e: HistoryEntry) {
+    if (this.silent) return;
     this.undoStack.push(e);
     if (this.undoStack.length > 500) this.undoStack.shift();
     this.redoStack = [];
@@ -1323,6 +1336,7 @@ export class Workbook {
       } else c.value = pi.value;
     }
     this.rebuildAll();
+    for (const sh of this.sheets) if (sh.filter) applyFilter(this, sh);
     if (resetHistory) {
       this.undoStack = [];
       this.redoStack = [];
