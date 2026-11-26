@@ -4,6 +4,8 @@ A fast, modern spreadsheet that runs in the browser. It has a real formula engin
 dynamic arrays, pivot tables, charts and data-analysis tools, all in a calm,
 keyboard-friendly interface with light and dark themes.
 
+**Live app: https://grid-indol-psi.vercel.app**
+
 ![GRID](docs/screenshot.jpg)
 
 ## Highlights
