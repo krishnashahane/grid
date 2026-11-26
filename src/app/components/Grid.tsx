@@ -341,7 +341,6 @@ export function Grid() {
       if (lk === 'd') { e.preventDefault(); A.fillDirection('down'); return; }
       if (lk === 'r') { e.preventDefault(); A.fillDirection('right'); return; }
       if (lk === 'f' || lk === 'h') { e.preventDefault(); store.set({ find: { replace: lk === 'h' } }); return; }
-      if (lk === 'k') { e.preventDefault(); store.set({ palette: true }); return; }
       if (lk === '`') { e.preventDefault(); store.set({ formulaView: !store.state.formulaView }); return; }
       if (lk === ';') { e.preventDefault(); A.commitInput(a.row, a.col, new Date().toISOString().slice(0, 10)); return; }
       if (k === 'Home') { e.preventDefault(); store.select(0, 0); return; }
