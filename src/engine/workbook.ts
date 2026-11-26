@@ -98,11 +98,26 @@ export interface NamedRange {
   comment?: string;
 }
 
-type GK = string; // `${sheetId}|${key}`
-const gk = (sid: string, key: number): GK => sid + '|' + key;
+// Global cell keys are plain numbers: sheetNumber * 2^37 + (row * MAX_COLS + col).
+// Numeric keys keep the dependency graph fast (no string building or hashing on hot paths).
+type GK = number;
+const SHEET_STRIDE = 2 ** 37;
+const sheetNums = new Map<string, number>();
+const numToSheet: string[] = [];
+const gk = (sid: string, key: number): GK => {
+  let n = sheetNums.get(sid);
+  if (n === undefined) {
+    n = numToSheet.length;
+    sheetNums.set(sid, n);
+    numToSheet.push(sid);
+  }
+  return n * SHEET_STRIDE + keyRow(key) * MAX_COLS + keyCol(key);
+};
 const splitGk = (g: GK): [string, number] => {
-  const i = g.lastIndexOf('|');
-  return [g.slice(0, i), +g.slice(i + 1)];
+  const n = Math.floor(g / SHEET_STRIDE);
+  const rem = g - n * SHEET_STRIDE;
+  const row = Math.floor(rem / MAX_COLS);
+  return [numToSheet[n], cellKey(row, rem - row * MAX_COLS)];
 };
 
 interface Precedents {
@@ -712,7 +727,7 @@ export class Workbook {
     } else {
       this.recalc(tx.seeds);
       this.flushLate();
-      const patches = [...tx.patches.values()].filter((p) => JSON.stringify(p.before) !== JSON.stringify(p.after));
+      const patches = [...tx.patches.values()].filter((p) => !sameCell(p.before, p.after));
       if (patches.length) this.pushHistory({ label, patches });
     }
     this.emit();
@@ -1390,6 +1405,14 @@ export class Workbook {
   }
 }
 
+function sameCell(a: SerialCell | null, b: SerialCell | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.raw !== b.raw || a.comment !== b.comment) return false;
+  if (a.style === b.style) return true;
+  return JSON.stringify(a.style ?? {}) === JSON.stringify(b.style ?? {});
+}
+
 function normalizeResult(v: Scalar): Scalar {
   // a formula that references an empty cell shows 0
   return v === null ? 0 : v;
@@ -1475,4 +1498,4 @@ export function deserializeSheet(d: SerialSheet): Sheet {
   return sh;
 }
 
-export { CellError, gk };
+export { CellError };

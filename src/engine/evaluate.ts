@@ -43,7 +43,7 @@ export interface FnDef {
   /** argument indices (or 'all') evaluated as references, so single cells arrive as 1×1 ranges */
   refArgs?: number[] | 'all';
   /** argument indices (or 'all') that are scalar and broadcast over arrays */
-  lift?: number[] | 'all';
+  lift?: number[] | 'all' | ((index: number) => boolean);
   fn?: (args: Value[], ev: Evaluator) => Value;
 }
 
@@ -169,7 +169,7 @@ export class Evaluator {
   }
 
   call(name: string, argNodes: Node[]): Value {
-    const def = FUNCTIONS.get(name) ?? FUNCTIONS.get(name.replace(/^_XLFN\./, ''));
+    const def = FUNCTIONS.get(name);
     if (!def) throw err('#NAME?', `Unknown function ${name}`);
     if (argNodes.length < def.min) throw err('#N/A', `${name} needs at least ${def.min} argument${def.min === 1 ? '' : 's'}`);
     if (argNodes.length > def.max) throw err('#VALUE!', `${name} accepts at most ${def.max} arguments`);
@@ -180,7 +180,8 @@ export class Evaluator {
       return asRef ? this.evRef(n) : this.ev(n);
     });
     if (def.lift) {
-      const idx = def.lift === 'all' ? args.map((_, i) => i) : def.lift.filter((i) => i < args.length);
+      const lf = def.lift;
+      const idx = lf === 'all' ? args.map((_, i) => i) : typeof lf === 'function' ? args.map((_, i) => i).filter(lf) : lf.filter((i) => i < args.length);
       const arrays = idx.filter((i) => isMatrix(args[i]));
       if (arrays.length) return liftCall(def, args, idx, this);
     }
@@ -271,6 +272,7 @@ function scalarBinary(op: BinOp, a: Scalar, b: Scalar): Scalar {
 
 function fin(n: number): number {
   if (!isFinite(n)) throw ERR.NUM;
+  if (Number.isInteger(n)) return n;
   // Tame binary floating-point noise (0.1+0.2) to 15 significant digits.
   if (n !== 0 && Math.abs(n) < 1e15) {
     const r = Number(n.toPrecision(15));
