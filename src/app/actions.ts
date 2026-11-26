@@ -12,6 +12,7 @@ import { uid, Workbook, SerialWorkbook } from '../engine/workbook';
 import { validateInput, validateCustomAfter } from '../engine/features/validation';
 import { scalarToText } from '../engine/format';
 import { geometryOf } from './geometry';
+import { addGroup, removeGroups, toggleAt, showLevel, OutlineAxis } from '../engine/features/outline';
 
 const S = () => getStore();
 const wb = () => S().wb;
@@ -275,6 +276,40 @@ export function unhideAll() {
     sh.hiddenCols.clear();
   });
 }
+// ------------------------------------------------------------------ outline groups
+/** Whole-column selections group columns; anything else groups rows. */
+function outlineTarget(axis?: OutlineAxis): { axis: OutlineAxis; s: number; e: number } {
+  const r = cur();
+  const ax = axis ?? (r.r1 === 0 && r.r2 >= MAX_ROWS - 1 && !(r.c1 === 0 && r.c2 >= MAX_COLS - 1) ? 'col' : 'row');
+  return ax === 'row' ? { axis: ax, s: r.r1, e: r.r2 } : { axis: ax, s: r.c1, e: r.c2 };
+}
+export function groupSelection(axis?: OutlineAxis) {
+  const t = outlineTarget(axis);
+  const noun = t.axis === 'row' ? 'rows' : 'columns';
+  let ok = false;
+  wb().updateSheet(sid(), `Group ${noun}`, (sh) => { ok = addGroup(sh, t.axis, t.s, t.e); });
+  if (!ok) S().toast(`Those ${noun} are already grouped or overlap another group`, 'info');
+}
+export function ungroupSelection(axis?: OutlineAxis) {
+  const t = outlineTarget(axis);
+  let n = 0;
+  wb().updateSheet(sid(), t.axis === 'row' ? 'Ungroup rows' : 'Ungroup columns', (sh) => { n = removeGroups(sh, t.axis, t.s, t.e); });
+  if (!n) S().toast('No group found in the selection', 'info');
+}
+export function toggleOutline(axis: OutlineAxis, index: number) {
+  const sh = wb().sheet(sid());
+  const g = sh && (axis === 'row' ? sh.rowGroups : sh.colGroups).find((x) => x.e === index - 1);
+  if (!g) return false;
+  wb().updateSheet(sid(), g.collapsed ? 'Expand group' : 'Collapse group', (s) => { toggleAt(s, axis, index); });
+  return true;
+}
+export function outlineLevel(level: number) {
+  wb().updateSheet(sid(), level ? 'Collapse groups' : 'Expand groups', (sh) => {
+    showLevel(sh, 'row', level);
+    showLevel(sh, 'col', level);
+  });
+}
+
 export function setColWidth(cols: number[], w: number) {
   wb().updateSheet(sid(), 'Column width', (sh) => cols.forEach((c) => sh.colWidths.set(c, Math.max(8, Math.round(w)))));
 }

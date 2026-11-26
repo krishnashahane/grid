@@ -28,7 +28,16 @@ export const DEFAULT_ROW_HEIGHT = 24;
 let idSeq = 0;
 export const uid = (p = 'id') => `${p}${Date.now().toString(36)}${(idSeq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
+/** An outline group of rows or columns (inclusive). Collapsing hides its members. */
+export interface OutlineGroup {
+  s: number;
+  e: number;
+  collapsed: boolean;
+}
+
 export class Sheet {
+  rowGroups: OutlineGroup[] = [];
+  colGroups: OutlineGroup[] = [];
   cells = new Map<number, Cell>();
   /** spilled (non-anchor) cells: key → anchor key + value */
   spill = new Map<number, { anchor: number; value: Scalar }>();
@@ -162,6 +171,8 @@ export interface SerialSheet {
   scenarios: Scenario[];
   tabColor?: string;
   showGridlines?: boolean;
+  rowGroups?: OutlineGroup[];
+  colGroups?: OutlineGroup[];
 }
 
 export interface SerialWorkbook {
@@ -1234,6 +1245,12 @@ export class Workbook {
         }
         return axis === 'row' ? { ...r, r1: s, r2: e } : { ...r, c1: s, c2: e };
       };
+      const remapGroups = (gs: OutlineGroup[]) => gs.map((gr) => {
+        const r = adjRect(axis === 'row' ? { r1: gr.s, r2: gr.e, c1: 0, c2: 0 } : { r1: 0, r2: 0, c1: gr.s, c2: gr.e });
+        return r ? { ...gr, s: axis === 'row' ? r.r1 : r.c1, e: axis === 'row' ? r.r2 : r.c2 } : null;
+      }).filter(Boolean) as OutlineGroup[];
+      if (axis === 'row') sh.rowGroups = remapGroups(sh.rowGroups);
+      else sh.colGroups = remapGroups(sh.colGroups);
       sh.cf = sh.cf.map((rule) => ({ ...rule, ranges: rule.ranges.map(adjRect).filter(Boolean) as Rect[] })).filter((r) => r.ranges.length);
       sh.validations = sh.validations.map((v) => {
         const r = adjRect(v.rect);
@@ -1470,6 +1487,8 @@ export function serializeSheet(sh: Sheet): SerialSheet {
     scenarios: sh.scenarios,
     tabColor: sh.tabColor,
     showGridlines: sh.showGridlines,
+    ...(sh.rowGroups.length ? { rowGroups: sh.rowGroups } : {}),
+    ...(sh.colGroups.length ? { colGroups: sh.colGroups } : {}),
   };
 }
 
@@ -1495,6 +1514,8 @@ export function deserializeSheet(d: SerialSheet): Sheet {
   sh.scenarios = d.scenarios ?? [];
   sh.tabColor = d.tabColor;
   sh.showGridlines = d.showGridlines ?? true;
+  sh.rowGroups = (d.rowGroups ?? []).map((g) => ({ ...g }));
+  sh.colGroups = (d.colGroups ?? []).map((g) => ({ ...g }));
   return sh;
 }
 

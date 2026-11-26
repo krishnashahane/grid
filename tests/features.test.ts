@@ -7,6 +7,8 @@ import { parseCSV, toCSV, detectDelimiter } from '../src/engine/features/csv';
 import { CFEngine } from '../src/engine/features/cf';
 import { validateInput } from '../src/engine/features/validation';
 import { applyFilter } from '../src/engine/features/filter';
+import { addGroup, removeGroups, toggleAt, showLevel, maxOutlineLevel } from '../src/engine/features/outline';
+import { deserializeSheet, serializeSheet } from '../src/engine/workbook';
 
 function setup(rows: (string | number)[][]) {
   const wb = new Workbook();
@@ -137,5 +139,45 @@ describe('conditional formatting, validation, filter', () => {
     sh.filter = { rect: { r1: 0, c1: 0, r2: 3, c2: 0 }, columns: { 0: { values: ['a'] } } };
     applyFilter(wb, sh);
     expect([...sh.filteredRows]).toEqual([2]);
+  });
+});
+
+describe('outline groups', () => {
+  it('groups, nests, collapses and expands rows', () => {
+    const wb = new Workbook();
+    const sh = wb.sheets[0];
+    expect(addGroup(sh, 'row', 1, 8)).toBe(true);
+    expect(addGroup(sh, 'row', 2, 4)).toBe(true);
+    expect(addGroup(sh, 'row', 2, 4)).toBe(false); // duplicate
+    expect(addGroup(sh, 'row', 5, 10)).toBe(false); // partial overlap
+    expect(maxOutlineLevel(sh.rowGroups)).toBe(2);
+    expect(toggleAt(sh, 'row', 5)).toBe(true); // inner group toggle sits on row 5
+    expect([2, 3, 4].every((r) => sh.isRowHidden(r))).toBe(true);
+    expect(sh.isRowHidden(1)).toBe(false);
+    toggleAt(sh, 'row', 9); // collapse outer
+    expect([1, 5, 8].every((r) => sh.isRowHidden(r))).toBe(true);
+    toggleAt(sh, 'row', 9); // expand outer: inner stays collapsed
+    expect(sh.isRowHidden(1)).toBe(false);
+    expect(sh.isRowHidden(3)).toBe(true);
+    showLevel(sh, 'row', 0);
+    expect(sh.hiddenRows.size).toBe(0);
+    showLevel(sh, 'row', 1);
+    expect(sh.rowGroups.every((g) => g.collapsed)).toBe(true);
+    expect(removeGroups(sh, 'row', 0, 20)).toBe(2);
+    expect(sh.hiddenRows.size).toBe(0);
+  });
+
+  it('follows row insertion and deletion, survives save and undo', () => {
+    const wb = new Workbook();
+    const sid = wb.sheets[0].id;
+    wb.updateSheet(sid, 'Group', (sh) => { addGroup(sh, 'col', 2, 4); addGroup(sh, 'row', 3, 6); });
+    wb.insertRows(sid, 0, 2);
+    expect(wb.sheet(sid)!.rowGroups[0]).toMatchObject({ s: 5, e: 8 });
+    wb.deleteRows(sid, 5, 4);
+    expect(wb.sheet(sid)!.rowGroups.length).toBe(0);
+    wb.undo();
+    expect(wb.sheet(sid)!.rowGroups[0]).toMatchObject({ s: 5, e: 8 });
+    const copy = deserializeSheet(JSON.parse(JSON.stringify(serializeSheet(wb.sheet(sid)!))));
+    expect(copy.colGroups[0]).toMatchObject({ s: 2, e: 4, collapsed: false });
   });
 });

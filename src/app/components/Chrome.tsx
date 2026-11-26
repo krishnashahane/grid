@@ -14,6 +14,7 @@ import {
   Sigma, Eraser, Sparkles, Target, Calculator, TrendingUp, Copy as CopyIcon, ShieldCheck, Palette, Tag, MessageSquare,
   FunctionSquare, Keyboard, Layers, CheckCircle2, Cloud, AlertTriangle, ChevronDown, Square, BarChartHorizontal,
   ListTree, FileSpreadsheet, Eye, Paintbrush, AlignVerticalJustifyCenter, ZoomIn, Rows3, Columns3, Upload,
+  Group, Ungroup, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 
 const ic = { size: 16, strokeWidth: 1.9 };
@@ -285,6 +286,12 @@ export function Toolbar() {
               {panelBtn('clean', 'Clean data, remove duplicates, split text', <Sparkles {...ic} />, 'Clean up')}
               {panelBtn('subtotal', 'Group and subtotal', <Sigma {...ic} />, 'Subtotals')}
               {panelBtn('names', 'Named ranges', <Tag {...ic} />, 'Names')}
+            </div>
+            <div className="tgroup">
+              {btn('Group the selected rows, or columns when whole columns are selected (Alt+Shift+→)', <Group {...ic} />, () => A.groupSelection(), false, 'Group')}
+              {btn('Ungroup the selection (Alt+Shift+←)', <Ungroup {...ic} />, () => A.ungroupSelection())}
+              {btn('Collapse all groups', <ChevronsDownUp {...ic} />, () => A.outlineLevel(1))}
+              {btn('Expand all groups', <ChevronsUpDown {...ic} />, () => A.outlineLevel(0))}
             </div>
             <div className="tgroup">
               {btn('Import CSV / TSV', <Upload {...ic} />, () => (document.querySelector('input[type=file]') as HTMLInputElement)?.click(), false, 'Import')}

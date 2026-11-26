@@ -556,6 +556,41 @@ function drawWrapped(ctx: CanvasRenderingContext2D, text: string, x: number, y: 
   ctx.restore();
 }
 
+/** Width (px from the header's leading edge) that responds to outline toggle clicks. */
+export const OUTLINE_HIT = 16;
+
+/** Outline bracket for expanded groups covering `i`, and a +/− toggle on the index just after a group. */
+function drawOutlineMarks(
+  ctx: CanvasRenderingContext2D, groups: { s: number; e: number; collapsed: boolean }[], i: number, p: Palette,
+  at: (toggle: boolean) => number[],
+) {
+  ctx.save();
+  if (groups.some((gr) => !gr.collapsed && i >= gr.s && i <= gr.e)) {
+    const [bx, by, bw, bh] = at(false);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = p.accent;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.globalAlpha = 1;
+  }
+  const ends = groups.filter((gr) => gr.e === i - 1);
+  if (ends.length) {
+    const collapsed = ends.some((gr) => gr.collapsed);
+    const [tx, ty] = at(true);
+    const S = 10;
+    ctx.fillStyle = collapsed ? p.accent : p.header;
+    ctx.strokeStyle = p.accent;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(tx + 0.5, ty + 0.5, S, S, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = collapsed ? '#fff' : p.accent;
+    ctx.fillRect(tx + 3, ty + S / 2, S - 5, 1.2);
+    if (collapsed) ctx.fillRect(tx + S / 2, ty + 3, 1.2, S - 5);
+  }
+  ctx.restore();
+}
+
 function drawHeaders(ctx: CanvasRenderingContext2D, sh: Sheet, g: Geometry, v: View, p: Palette, ov: Overlay, panes: Pane[]) {
   const z = v.zoom;
   const sel = ov.ranges.map(normRect);
@@ -589,6 +624,7 @@ function drawHeaders(ctx: CanvasRenderingContext2D, sh: Sheet, g: Geometry, v: V
       }
       ctx.fillStyle = fullCol(c) ? '#fff' : s ? p.headerActiveText : p.headerText;
       ctx.fillText(colToName(c), x + w / 2, HEADER_H / 2);
+      if (sh.colGroups.length) drawOutlineMarks(ctx, sh.colGroups, c, p, (t) => t ? [x + 3, HEADER_H / 2 - 5] : [x, HEADER_H - 3, w, 1.5]);
       ctx.fillStyle = p.line;
       ctx.fillRect(Math.round(x + w) - 1, 4, 1, HEADER_H - 8);
       if (g.cols.size(c + 1) === 0 && c + 1 < g.cols.count) {
@@ -617,6 +653,7 @@ function drawHeaders(ctx: CanvasRenderingContext2D, sh: Sheet, g: Geometry, v: V
       }
       ctx.fillStyle = fullRow(r) ? '#fff' : s ? p.headerActiveText : p.headerText;
       ctx.fillText(String(r + 1), HEADER_W / 2, y + h / 2);
+      if (sh.rowGroups.length) drawOutlineMarks(ctx, sh.rowGroups, r, p, (t) => t ? [3, y + h / 2 - 5] : [3, y, 1.5, h]);
       ctx.fillStyle = p.line;
       ctx.fillRect(6, Math.round(y + h) - 1, HEADER_W - 12, 1);
       if (g.rows.size(r + 1) === 0 && r + 1 < g.rows.count) {

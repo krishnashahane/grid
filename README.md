@@ -31,6 +31,7 @@ keyboard-friendly interface with light and dark themes.
 **Data analysis**
 - **Pivot tables** with row, column and value fields and eight aggregations, refreshable, plus **pivot charts**.
 - **Charts**: column, bar, stacked, line, area, pie, doughnut and scatter. They stay linked to live data and can be dragged and resized.
+- **Row and column grouping**: nested outline groups with +/− toggles in the headers, collapse/expand all, and `Alt+Shift+→` / `Alt+Shift+←` to group and ungroup.
 - Filters with value lists and conditions, an **advanced filter** with AND/OR rules (filter in place or copy out), and **multi-column sorting**.
 - **Conditional formatting**: comparisons, text rules, top/bottom N, above/below average, duplicates and uniques, date rules, custom formulas, colour scales and data bars.
 - **Data validation**: dropdown lists (typed or from a range), number, whole-number, date and text-length rules, checkboxes and custom formulas, with either reject or warn behaviour.

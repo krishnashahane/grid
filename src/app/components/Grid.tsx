@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getStore, useApp, useWorkbookVersion } from '../store';
 import { geometryOf, HEADER_H, HEADER_W } from '../geometry';
-import { drawGrid, readPalette, hitTest, cellScreenRect, rectScreen, View, Palette } from '../render';
+import { drawGrid, readPalette, hitTest, cellScreenRect, rectScreen, View, Palette, OUTLINE_HIT } from '../render';
 import { CFEngine } from '../../engine/features/cf';
 import { MAX_COLS, MAX_ROWS, Rect, normRect, cellKey, colToName, cellName, inRect, quoteSheetName } from '../../engine/address';
 import * as A from '../actions';
@@ -17,6 +17,7 @@ import { CellError, ERROR_EXPLANATIONS } from '../../engine/values';
 import {
   Copy, Scissors, ClipboardPaste, Trash2, MessageSquare, ArrowUpNarrowWide, ArrowDownWideNarrow, EyeOff, Eye, Rows3, Columns3,
   Snowflake, Filter, BarChart3, Link2, Plus, Minus,
+  Group, Ungroup,
 } from 'lucide-react';
 
 type Drag =
@@ -353,6 +354,11 @@ export function Grid() {
       store.selectRect({ r1: r.r1, r2: r.r2, c1: 0, c2: MAX_COLS - 1 }, a);
       return;
     }
+    if (e.altKey && e.shiftKey && (k === 'ArrowRight' || k === 'ArrowLeft')) {
+      e.preventDefault();
+      k === 'ArrowRight' ? A.groupSelection() : A.ungroupSelection();
+      return;
+    }
     if (e.altKey && k === 'ArrowDown') {
       const rule = ruleAt(wb, sheetId, a.row, a.col);
       if (rule?.type === 'list') { e.preventDefault(); openList(a.row, a.col); return; }
@@ -573,6 +579,13 @@ export function Grid() {
     if (h.area === 'corner') {
       store.selectRect({ r1: 0, c1: 0, r2: MAX_ROWS - 1, c2: MAX_COLS - 1 }, { row: 0, col: 0 });
       return;
+    }
+    if (h.area === 'colHeader' && !ev.shiftKey && sh.colGroups.length) {
+      const rc = cellScreenRect(sh, g, view, 0, h.col);
+      if (x - rc.x < OUTLINE_HIT && A.toggleOutline('col', h.col)) return;
+    }
+    if (h.area === 'rowHeader' && !ev.shiftKey && sh.rowGroups.length && x < OUTLINE_HIT) {
+      if (A.toggleOutline('row', h.row)) return;
     }
     if (h.area === 'colHeader') {
       if (ev.shiftKey) {
@@ -841,6 +854,8 @@ export function Grid() {
             { label: `Delete column${cols > 1 ? 's' : ''}`, icon: <Minus {...ic} />, danger: true, onClick: () => A.deleteCols() },
             { label: 'Hide columns', icon: <EyeOff {...ic} />, onClick: () => A.hideCols(true) },
             { label: 'Unhide columns', icon: <Eye {...ic} />, onClick: () => A.hideCols(false) },
+            { label: 'Group columns', icon: <Group {...ic} />, kbd: '⌥⇧→', onClick: () => A.groupSelection('col') },
+            { label: 'Ungroup columns', icon: <Ungroup {...ic} />, kbd: '⌥⇧←', onClick: () => A.ungroupSelection('col') },
             { label: 'Fit to content', icon: <Columns3 {...ic} />, onClick: () => A.autofitColumns(Array.from({ length: cols }, (_, i) => cur.c1 + i)) },
           ]
         : isRow
@@ -850,6 +865,8 @@ export function Grid() {
               { label: `Delete row${rows > 1 ? 's' : ''}`, icon: <Minus {...ic} />, danger: true, onClick: () => A.deleteRows() },
               { label: 'Hide rows', icon: <EyeOff {...ic} />, onClick: () => A.hideRows(true) },
               { label: 'Unhide rows', icon: <Eye {...ic} />, onClick: () => A.hideRows(false) },
+              { label: 'Group rows', icon: <Group {...ic} />, kbd: '⌥⇧→', onClick: () => A.groupSelection('row') },
+              { label: 'Ungroup rows', icon: <Ungroup {...ic} />, kbd: '⌥⇧←', onClick: () => A.ungroupSelection('row') },
             ]
           : [
               { label: 'Insert row above', icon: <Rows3 {...ic} />, onClick: () => A.insertRows(true) },
